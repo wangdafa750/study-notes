@@ -1,0 +1,418 @@
+% !TeX program = xelatex
+\documentclass[12pt,a4paper]{ctexart}
+
+\usepackage{preamble}
+\usepackage{tabularx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit}
+
+% ====== 文档元数据 ======
+\title{Git 项目管理笔记：从日常提交到科研复现}
+
+\begin{document}
+
+	\maketitle
+	\pagestyle{fancy}
+	\markboth{Git 项目管理笔记}{}
+
+	% ========== 1 核心概念 ==========
+	\section{核心概念：四个区域与基本命令}
+
+	Git 是分布式版本控制系统（VCS）：记录代码的修改历史，支持比较版本、恢复旧版本、在分支上试验新算法、与团队合并工作。对科研代码而言，它最重要的价值不是``把代码上传到 GitHub''，而是把\textbf{源代码版本、实验变更与可复现结果}联系起来。
+
+	\subsection{四个区域}
+
+	Git 的核心心智模型：文件在四个区域之间流转——本地三个区域，远程一个：
+
+	\begin{center}
+	\begin{tikzpicture}[
+		node distance=5mm,
+		area/.style={draw=nordblue, fill=nordblue!10, rounded corners=1.5pt,
+			minimum width=74mm, align=center, font=\small, inner ysep=2.2mm},
+		remotearea/.style={area, draw=nordorange, fill=nordorange!10},
+		arr/.style={-{Stealth[length=2.5mm]}, thick},
+		cmd/.style={font=\footnotesize, midway, right=2mm},
+	]
+		\node[area] (wd) {\textbf{工作区} Working Directory\\ {\footnotesize 你正在修改的文件}};
+		\node[area, below=of wd] (sa) {\textbf{暂存区} Staging Area\\ {\footnotesize 本次准备提交的文件变化}};
+		\node[area, below=of sa] (lr) {\textbf{本地仓库} \texttt{.git}\\ {\footnotesize 保存 Commit、分支和历史}};
+		\node[draw=nordgray, dashed, inner xsep=4mm, inner ysep=3.5mm,
+			fit=(wd)(sa)(lr),
+			label={[font=\footnotesize\color{nordblack!60},anchor=south west]north west:本地计算机}] {};
+		\node[remotearea, below=9mm of lr] (rr) {\textbf{远程仓库} GitHub\\ {\footnotesize 协作副本与备份}};
+		\draw[arr, nordblue]  (wd) -- node[cmd] {\texttt{git add}} (sa);
+		\draw[arr, nordblue]  (sa) -- node[cmd] {\texttt{git commit}} (lr);
+		\draw[arr, nordblue]  (lr) -- node[cmd] {\texttt{git push}} (rr);
+		\draw[arr, dashed, nordorange] (rr.west) -- ++(-8mm,0) |- node[cmd, left=2mm, pos=0.55] {\texttt{git fetch / git pull}} (lr.west);
+	\end{tikzpicture}
+	\end{center}
+
+	各区域职责与流转命令对照：
+
+	\begin{tabularx}{\linewidth}{l X l}
+		\toprule
+		\textbf{区域} & \textbf{保存内容} & \textbf{流转命令} \\
+		\midrule
+		工作区 (Working Directory) & 你正在修改的文件 & \texttt{git add} \\
+		暂存区 (Staging Area) & 本次准备提交的变化 & \texttt{git commit} \\
+		本地仓库 (\texttt{.git}) & Commit、分支和历史 & \texttt{git push} \\
+		远程仓库 (GitHub/GitLab) & 协作副本与备份 & \texttt{git fetch} / \texttt{git pull} \\
+		\bottomrule
+	\end{tabularx}
+
+	\begin{warning}{Git 不是 GitHub，未提交 ≠ 已备份}{not-github}
+		Git 是本地工具，没有 GitHub 账号也能运行 \texttt{git init}、\texttt{git commit}、\texttt{git branch}。一个 Commit 是项目的版本快照，由哈希 ID 唯一标识；工作区里未提交的修改\textbf{不会}因为执行 \texttt{git push} 而自动上传。
+	\end{warning}
+
+	\subsection{最先记住的 10 个命令}
+
+	\begin{tabularx}{\linewidth}{l X}
+		\toprule
+		\textbf{命令} & \textbf{用途} \\
+		\midrule
+		\texttt{git init} & 初始化本地仓库 \\
+		\texttt{git clone URL} & 克隆远程仓库 \\
+		\texttt{git status} & 查看当前状态 \\
+		\texttt{git add PATH} & 暂存文件变化 \\
+		\texttt{git commit -m "..."} & 创建本地提交 \\
+		\texttt{git push} & 推送提交到远程 \\
+		\texttt{git pull} & 获取并整合远程变更 \\
+		\texttt{git log --oneline} & 查看简短提交历史 \\
+		\texttt{git switch -c NAME} & 创建并切换分支 \\
+		\texttt{git merge NAME} & 合并指定分支 \\
+		\bottomrule
+	\end{tabularx}
+
+	% ========== 2 安装配置 ==========
+	\section{安装与最小配置}
+
+	\begin{codeblock}{bash}
+sudo apt update && sudo apt install git   # 安装
+git config --global user.name "Your Name"
+git config --global user.email "your_email@example.com"
+git config --global init.defaultBranch main   # 统一新仓库默认分支
+	\end{codeblock}
+
+	身份信息写入每次提交的作者字段，建议邮箱与 GitHub 邮箱一致；\texttt{init.defaultBranch} 只影响之后新建的仓库。给单个仓库换身份时，去掉 \texttt{--global} 重新执行即可。
+
+	\subsection{SSH 免密配置（推荐一次性做好）}
+
+	\begin{codeblock}{bash}
+ls -al ~/.ssh                                   # 检查是否已有密钥
+ssh-keygen -t ed25519 -C "your_email@example.com"
+eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519
+cat ~/.ssh/id_ed25519.pub        # 复制到 GitHub -> Settings -> SSH keys
+ssh -T git@github.com            # 测试连接
+	\end{codeblock}
+
+	\begin{warning}{私钥绝不能上传}{private-key}
+		\texttt{id\_ed25519} 是私钥，只能分享 \texttt{id\_ed25519.pub}。若密钥文件已存在，不要不加判断地覆盖。
+	\end{warning}
+
+	% ========== 3 日常工作流 ==========
+	\section{日常工作流：从 Clone 到 Pull Request}
+
+	这是日常管理项目唯一需要背下来的操作序列：
+
+	\begin{codeblock}{bash}
+# 首次下载仓库（只执行一次）
+git clone https://github.com/YOUR_USERNAME/robot-policy.git
+cd robot-policy
+
+# 从最新 main 开始一个独立任务
+git switch main
+git pull --ff-only
+git switch -c feature/pose-estimation
+
+# 修改代码后：检查 -> 暂存 -> 核对 -> 提交
+git status
+git diff
+git add train.py
+git diff --staged
+git commit -m "Improve visual pose estimation"
+
+# 首次推送功能分支，然后到 GitHub 页面发起 PR
+git push -u origin feature/pose-estimation
+
+# PR 合并后，同步本地 main
+git switch main
+git pull --ff-only
+	\end{codeblock}
+
+	\begin{example}{分清哪些步骤是本地的}{local-vs-remote}
+		\texttt{git add} 只更新暂存区，\texttt{git commit} 只创建本地历史，\texttt{git push} 才向远程上传；Pull Request 是审阅与合并请求，不等于本地 commit。三者层层递进，出问题时先想清楚改动卡在哪一层。
+	\end{example}
+
+	\begin{warning}{不要对没有写入权限的仓库练习 push}{fork-first}
+		开源项目的上游仓库通常没有推送权限。想贡献代码：先 Fork 到个人账号、克隆自己的 Fork；或在团队仓库中通过授权分支发起 PR。更新本地稳定分支用 \texttt{git pull --ff-only}：它只接受快进更新，历史分叉时会停下来要求你明确处理。
+	\end{warning}
+
+	% ========== 4 检查改动 ==========
+	\section{检查改动：Status、Diff 与 Log}
+
+	调试训练问题时，知道代码\textbf{实际改了什么}比记住``我应该改了什么''更重要：
+
+	\begin{codeblock}{bash}
+git diff                 # 工作区 vs 暂存区
+git diff --staged        # 暂存区 vs 最近提交
+git diff -- train.py     # 只看某个文件
+git log --oneline --graph --all   # 提交图：分支与合并一目了然
+	\end{codeblock}
+
+	提交图示例（分叉、合并一目了然）：
+
+	\begin{codeblock}{}
+* a34bd21 (HEAD -> main) Merge SAC implementation
+|\
+| * d72f8a1 Implement SAC algorithm
+| * f61b2c9 Add replay buffer
+|/
+* b83fc92 Implement PPO
+* 28ad613 Initial commit
+	\end{codeblock}
+
+	Diff 输出中 \texttt{-} 是旧内容、\texttt{+} 是新内容，例如 \texttt{- learning\_rate = 3e-4} / \texttt{+ learning\_rate = 1e-4}。查看单次提交用 \texttt{git show HASH}，追查某行代码由哪次提交改动用 \texttt{git blame train.py}。
+
+	\textbf{提交前三项检查：}（1）\texttt{git status} 确认所在分支与待提交文件；（2）\texttt{git diff --staged} 核对实际进入本次提交的改动；（3）确认没有误加临时文件、模型权重或密码等敏感信息。
+
+	% ========== 5 分支与冲突 ==========
+	\section{分支、协作与冲突处理}
+
+	分支让你同时维护稳定版本（\texttt{main}）和实验性代码（\texttt{feature/sac}）：
+
+	\begin{codeblock}{}
+A --- B ---------------- M ---- main
+ \                    /
+  C --- D ----------/      feature/sac
+	\end{codeblock}
+
+	其中 \texttt{M} 代表一次可能的合并提交；若满足快进条件，Git 也可能不创建 \texttt{M}。
+
+	\begin{codeblock}{bash}
+git branch                     # 列出本地分支
+git switch -c feature/sac      # 创建并切换分支
+git switch main                # 切回 main
+git merge feature/sac          # 在 main 上合并功能分支
+git branch -d feature/sac      # 删除已安全合并的分支
+git push origin --delete feature/sac   # 删除远程分支
+	\end{codeblock}
+
+	临时切走又不想提交半成品时，用 stash 收起改动：\texttt{git stash push -u -m "WIP SAC training"}，回来后 \texttt{git stash pop}。Stash 恢复也可能冲突，不能当长期备份。
+
+	科研团队可以按模块建立分支，让仓库结构即项目分工：
+
+	\begin{codeblock}{}
+main
+├── feature/ppo
+├── feature/sac
+├── feature/pose-estimation
+└── feature/sim2real
+	\end{codeblock}
+
+	推荐流程：\textbf{Feature Branch $\to$ Push $\to$ Pull Request $\to$ Review $\to$ Merge}。
+
+	\subsection{解决冲突}
+
+	两个分支修改了同一处内容时，Git 无法自动判断保留哪个版本，会在文件里留下标记：
+
+	\begin{codeblock}{}
+<<<<<<< HEAD
+learning_rate = 0.0001        # 当前分支的版本
+=======
+learning_rate = 0.0003        # 传入分支的版本
+>>>>>>> feature/sac
+	\end{codeblock}
+
+	\begin{example}{解决冲突的固定步骤}{conflict-steps}
+		\begin{enumerate}[itemsep=0pt]
+			\item \texttt{git status} 定位冲突文件；
+			\item 理解两边修改意图，选择一边或编写兼容两边的最终代码；
+			\item 删除全部冲突标记（\texttt{<<<<<<<}、\texttt{=======}、\texttt{>>>>>>>}）；
+			\item 运行测试确认逻辑正确，尤其奖励函数、动作尺度、坐标系这类无法靠肉眼判断的代码；
+			\item \texttt{git add} 标记已解决，\texttt{git commit} 完成合并。
+		\end{enumerate}
+		想放弃本次合并：\texttt{git merge --abort}；若冲突发生在 rebase 中，对应的命令是 \texttt{git rebase --continue} / \texttt{git rebase --abort}。
+	\end{example}
+
+	\texttt{git rebase main} 把实验分支移到新基线，相当于把自己的提交摘下来、重放到最新 \texttt{main} 之后：
+
+	\begin{codeblock}{}
+原始历史:
+main:    A --- B --- C
+feature: A --- B --- D --- E
+
+rebase 后:
+main:    A --- B --- C
+feature: A --- B --- C --- D' --- E'
+	\end{codeblock}
+
+	\begin{warning}{rebase 只用于自己的私有分支}{rebase}
+		rebase 会重放提交并生成\textbf{新的提交 ID}（上图中的 D'、E'）。适合整理自己的未共享分支，绝不要重写他人正在使用的共享历史。
+	\end{warning}
+
+	团队协作的基本习惯：\textbf{不要在共享主分支直接进行未验证的大型改动}，让新特性先在隔离分支上通过基本测试。
+
+	% ========== 6 撤销 ==========
+	\section{撤销与恢复：先分清状态}
+
+	恢复操作必须区分：修改是否已暂存、是否已提交、是否已共享。以下命令互不等价：
+
+	\begin{tabularx}{\linewidth}{l l X}
+		\toprule
+		\textbf{操作} & \textbf{影响} & \textbf{典型场景} \\
+		\midrule
+		\texttt{git restore FILE} & 丢弃文件未暂存修改 & 放弃本地临时改动 \\
+		\texttt{git restore --staged FILE} & 取消暂存，保留改动 & 文件被误加到暂存区 \\
+		\texttt{git reset --soft HEAD\textasciitilde1} & 回退分支指针，保留暂存 & 整理未共享的提交 \\
+		\texttt{git reset HEAD\textasciitilde1} & 回退指针，保留工作区 & 重新选择修改再提交 \\
+		\texttt{git reset --hard HEAD\textasciitilde1} & 回退并丢弃相应修改 & 确认无需保留时 \\
+		\texttt{git revert HASH} & 增加一个反向提交 & 撤销\textbf{已共享}的提交 \\
+		\bottomrule
+	\end{tabularx}
+
+	\begin{warning}{reset --hard 是破坏性操作}{reset-hard}
+		基本原则：\textbf{本地未共享的历史可以谨慎 reset；共享历史优先 revert}。执行 \texttt{--hard} 前务必确认代码、实验结果和未提交内容不需要保留。
+	\end{warning}
+
+	% ========== 7 大文件管理 ==========
+	\section{大文件管理：.gitignore、LFS 与 DVC}
+
+	数 GB 的数据集、模型权重、训练日志不适合直接提交到 Git。项目根目录的 \texttt{.gitignore} 推荐模板：
+
+	\begin{codeblock}{}
+# Python cache
+__pycache__/
+*.pyc
+.venv/
+# Secrets
+.env
+*.pem
+# Model artifacts
+*.pt
+*.pth
+*.ckpt
+checkpoints/
+# Training outputs
+outputs/
+logs/
+wandb/
+# Large datasets
+data/
+datasets/
+	\end{codeblock}
+
+	\begin{warning}{.gitignore 只影响尚未跟踪的文件}{gitignore-scope}
+		\texttt{checkpoint.pt} 若已被跟踪，写了 \texttt{*.pt} 也不会自动退出版本控制，需执行 \texttt{git rm --cached checkpoint.pt} 停止跟踪（保留本地文件）。误传 API Key 或口令时应立即撤销、轮换凭据。
+	\end{warning}
+
+	按文件类型选择管理方案：
+
+	\begin{tabularx}{\linewidth}{l X X}
+		\toprule
+		\textbf{方案} & \textbf{管理对象} & \textbf{核心注意事项} \\
+		\midrule
+		普通 Git + \texttt{.gitignore} & 代码、配置、文档 & 忽略规则不会删除已上传的历史 \\
+		Git LFS & 与版本关联的较大二进制 & Git 存指针；服务端需支持，可能有配额 \\
+		DVC + 外部存储 & 大规模数据集及流水线元数据 & Git 只存 \texttt{.dvc} 元数据，需单独配置远程存储 \\
+		对象存储 / 实验平台 & 海量视频、检查点、日志 & 保存版本与校验和，别只存会变化的 URL \\
+		\bottomrule
+	\end{tabularx}
+
+	\begin{codeblock}{bash}
+git lfs install
+git lfs track "*.onnx"
+git add .gitattributes models/policy.onnx
+git commit -m "Track policy model via LFS"
+	\end{codeblock}
+
+	\textbf{分离原则：}Git 管源码、配置、脚本、文档；模型检查点、视频、日志放实验平台或对象存储；实验元数据保存 Commit ID、数据版本、权重哈希和训练参数。安装 LFS/DVC 并不自动提供无限远程空间。
+
+	% ========== 8 科研复现 ==========
+	\section{科研进阶：实验复现与版本追踪}
+
+	按任务命名分支，让仓库历史即实验记录：
+
+	\begin{tabularx}{\linewidth}{l X}
+		\toprule
+		\textbf{分支 / Tag} & \textbf{场景} \\
+		\midrule
+		\texttt{feature/ppo}、\texttt{feature/sac} & 新增算法 \\
+		\texttt{experiment/reward-v2} & 探索新奖励函数 \\
+		\texttt{fix/control-latency} & 修复线上控制 Bug \\
+		\texttt{v1.0-deploy} (Tag) & 用 Tag 固定论文复现或部署版本 \\
+		\bottomrule
+	\end{tabularx}
+
+	\begin{example}{一次实验至少应绑定哪些版本信息}{exp-meta}
+		完整 Commit ID、工作区是否干净、配置文件、随机种子、依赖与仿真器版本、数据集版本/校验和、模型 checkpoint 哈希；真机实验还要注明 URDF/固件/相机外参/控制频率。
+	\end{example}
+
+	\begin{codeblock}{}
+experiment:
+  name: residual_velocity_v3
+  git_commit: a82bc31      # 由 git rev-parse HEAD 得到，正式记录写完整哈希
+  random_seed: 42
+  training:
+    learning_rate: 0.0003
+    batch_size: 256
+	\end{codeblock}
+
+	\begin{warning}{Commit ID 只标记已提交的代码状态}{commit-id}
+		如果实验启动时存在未提交修改，仅保存哈希并不能完整复现。正式运行前检查 \texttt{git status}，必要时先建立实验提交。它也不代替数据和环境管理。
+	\end{warning}
+
+	为经过验证的版本打 Tag 并推送：
+	\begin{codeblock}{bash}
+git tag -a v1.0-deploy -m "Validated robot deployment"
+git push origin v1.0-deploy
+	\end{codeblock}
+
+	% ========== 9 常见错误 ==========
+	\section{常见错误速查}
+
+	\begin{tabularx}{\linewidth}{l X}
+		\toprule
+		\textbf{报错} & \textbf{原因与处理} \\
+		\midrule
+		\texttt{fatal: not a git repository} & 当前目录不在仓库内。用 \texttt{pwd}、\texttt{ls -a} 确认位置；确要新建仓库才运行 \texttt{git init} \\
+		\texttt{Permission denied (publickey)} & SSH 认证失败。运行 \texttt{ssh -T git@github.com} 排查，确认 Agent 已加载密钥、公钥已添加到账号 \\
+		\texttt{Updates were rejected} & 远程有本地没有的提交。先 \texttt{git fetch}，再 \texttt{git pull --rebase} 解决冲突后推送 \\
+		\texttt{local changes would be overwritten} & 未提交改动将被覆盖。先 \texttt{git commit} 或 \texttt{git stash push -u}，再重复原操作 \\
+		\bottomrule
+	\end{tabularx}
+
+	\begin{warning}{状态不明时，先 git status 再行动}{status-first}
+		遇到不熟悉的报错，先运行 \texttt{git status} 并阅读 Git 的提示，判断处于 merge、rebase 还是普通状态。不要在状态不明时连续执行 \texttt{reset --hard}、\texttt{clean -fd} 或强制推送；\texttt{git push --force} 可能覆盖别人的提交。
+	\end{warning}
+
+	% ========== 10 速查表 ==========
+	\section{命令速查表}
+
+	\begin{tabularx}{\linewidth}{l l X}
+		\toprule
+		\textbf{分类} & \textbf{命令} & \textbf{用途} \\
+		\midrule
+		初始化 & \texttt{git init} & 创建本地仓库 \\
+		克隆 & \texttt{git clone URL} & 下载仓库 \\
+		状态 & \texttt{git status} & 查看当前状态 \\
+		差异 & \texttt{git diff} & 查看未暂存改动 \\
+		历史 & \texttt{git log --oneline} & 查看提交历史 \\
+		暂存 & \texttt{git add .} & 暂存当前目录变化 \\
+		提交 & \texttt{git commit -m "msg"} & 创建提交 \\
+		上传 & \texttt{git push} & 推送本地提交 \\
+		获取 & \texttt{git fetch} & 下载远程状态，不自动合并 \\
+		同步 & \texttt{git pull --ff-only} & 仅允许快进更新 \\
+		分支 & \texttt{git switch -c name} & 新建并切换分支 \\
+		合并 & \texttt{git merge name} & 合并指定分支 \\
+		撤销 & \texttt{git restore --staged file} & 取消暂存 \\
+		回退 & \texttt{git revert HASH} & 生成反向提交 \\
+		收起 & \texttt{git stash} / \texttt{git stash pop} & 临时收起 / 恢复改动 \\
+		信息 & \texttt{git show HASH}、\texttt{git blame file} & 查看提交 / 追踪行历史 \\
+		\bottomrule
+	\end{tabularx}
+
+	\subsection*{结语}
+
+	保持四个习惯：\textbf{小步提交、分支实验、审查 Diff、避免上传大文件}，再逐步扩展到团队协作（Fork/PR、受保护主分支、CI）。官方资料：Pro Git（有中文版）、GitHub SSH 文档、GitHub Pull Request 指南。
+
+\end{document}

@@ -1,0 +1,207 @@
+% preamble.sty —— 单篇论文笔记样式
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{preamble}[2026/06/09 v2.0 Single article notes style]
+
+% ========== 页面设置 ==========
+\RequirePackage{geometry}
+\geometry{
+	a4paper,
+	left=28mm,
+	right=28mm,
+	top=30mm,
+	bottom=25mm,
+	headheight=14pt,
+	headsep=8mm,
+	footskip=12mm
+}
+
+% ========== Nord 色彩 ==========
+\RequirePackage{xcolor}
+\definecolor{nordblack}{HTML}{2E3440}
+\definecolor{nordblue}{HTML}{5E81AC}
+\definecolor{nordbrightblue}{HTML}{81A1C1}
+\definecolor{nordgreen}{HTML}{A3BE8C}
+\definecolor{nordorange}{HTML}{D08770}
+\definecolor{nordred}{HTML}{BF616A}
+\definecolor{nordgray}{HTML}{D8DEE9}
+\definecolor{nordwhite}{HTML}{ECEFF4}
+
+% ========== 字体 ==========
+\RequirePackage{fontspec}
+\setmainfont{Times New Roman}
+\setsansfont{Arial}
+\setmonofont{Consolas}[Scale=0.9]
+
+% ========== 标题格式（仅节与小节） ==========
+\RequirePackage{titlesec}
+
+% Section：左侧彩色标签
+\titleformat{\section}
+{\Large\sffamily\bfseries\color{nordblack}}
+{}
+{0pt}
+{\colorbox{nordblue!15}{\makebox[2em][c]{\thesection}}\quad}
+\titleformat{name=\section,numberless}
+{\Large\sffamily\bfseries\color{nordblack}}
+{}
+{0pt}
+{}
+
+% Subsection：简洁蓝色
+\titleformat{\subsection}
+{\large\sffamily\bfseries\color{nordblue}}
+{\thesubsection}
+{1em}
+{}
+\titleformat{name=\subsection,numberless}
+{\large\sffamily\bfseries\color{nordblue}}
+{}
+{0pt}
+{}
+
+% ========== 页眉页脚 ==========
+\RequirePackage{fancyhdr}
+\RequirePackage{extramarks}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\sffamily\small\color{nordblack!70}\leftmark}    % 显示节标题或固定文字
+\fancyhead[R]{\sffamily\small\color{nordblack!70}\rightmark}   % 显示当前小节
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hrule width\headwidth height\headrulewidth \color{nordgray}}
+\fancyfoot[C]{\sffamily\small\color{nordblack!50}—\ \thepage\ —}
+
+% 让 section 出现在右页眉（article 类中 \rightmark 默认由 \sectionmark 设置）
+\renewcommand{\sectionmark}[1]{\markright{\thesection\quad #1}}
+% 如有需要，可让 subsection 也出现在右页眉，默认已支持
+
+% ========== 数学 ==========
+\RequirePackage{amsmath,amssymb,mathtools}
+\numberwithin{equation}{section}      % 公式按节编号
+
+% ========== 代码高亮 ==========
+\RequirePackage{listings}
+\RequirePackage{tcolorbox}
+\tcbuselibrary{listings,breakable,skins,theorems}
+
+\lstset{
+	basicstyle=\ttfamily\small,
+	numbers=left,
+	numberstyle=\tiny\color{nordblack!50},
+	stepnumber=1,
+	numbersep=5pt,
+	backgroundcolor=\color{nordwhite},
+	showspaces=false,
+	showstringspaces=false,
+	showtabs=false,
+	frame=single,
+	rulecolor=\color{nordgray},
+	tabsize=2,
+	captionpos=b,
+	breaklines=true,
+	breakatwhitespace=false,
+	title=\lstname,
+	keywordstyle=\color{nordblue}\bfseries,
+	commentstyle=\color{nordgreen!60!black},
+	stringstyle=\color{nordorange},
+}
+
+% 可定制的代码块
+\newtcblisting{codeblock}[2][]{
+	listing engine=listings,
+	listing only,      % 只渲染代码，不把代码当正文重复排版
+	colback=nordwhite,
+	colframe=nordgray,
+	listing options={
+		language=#2,
+		#1
+	},
+	enhanced,
+	boxrule=0.4pt,
+	left=2mm,
+	right=2mm,
+	top=1mm,
+	bottom=1mm,
+	before skip=6pt,
+	after skip=6pt,
+}
+
+% ========== 定理类环境（按节编号） ==========
+\newtcbtheorem[auto counter, number within=section]{theorem}{定理}{
+	enhanced,
+	breakable,
+	colback=white,
+	colframe=nordbrightblue,
+	coltitle=white,
+	fonttitle=\bfseries\sffamily,
+	attach boxed title to top left={xshift=5mm,yshift=-3mm},
+	boxed title style={colback=nordbrightblue,sharp corners},
+	leftrule=4mm,
+	rightrule=0.5mm,
+	toprule=0.5mm,
+	bottomrule=0.5mm,
+	titlerule=0mm,
+	arc=2mm,
+	borderline west={2mm}{0pt}{nordbrightblue!30},
+}{th}
+
+\newtcbtheorem[auto counter, number within=section]{example}{例子}{
+	enhanced,
+	breakable,
+	colback=white,
+	colframe=nordgreen,
+	coltitle=white,
+	fonttitle=\bfseries\sffamily,
+	attach boxed title to top left={xshift=5mm,yshift=-3mm},
+	boxed title style={colback=nordgreen,sharp corners},
+	left=2mm,
+	right=2mm,
+	top=3mm,
+	bottom=3mm,
+	borderline horizontal={0.4mm}{0pt}{nordgreen},
+}{ex}
+
+\newtcbtheorem[auto counter, number within=section]{warning}{避坑}{
+	enhanced,
+	breakable,
+	colback=white,
+	colframe=nordred,
+	coltitle=white,
+	fonttitle=\bfseries\sffamily,
+	attach boxed title to top left={xshift=5mm,yshift=-3mm},
+	boxed title style={colback=nordred,sharp corners},
+	left=5mm,
+	right=2mm,
+	top=3mm,
+	bottom=3mm,
+	frame hidden,
+	borderline west={3mm}{0pt}{nordred},
+}{warn}
+
+% ========== 超链接 ==========
+\RequirePackage{hyperref}
+\hypersetup{
+	colorlinks=true,
+	linkcolor=nordblue,
+	citecolor=nordgreen,
+	urlcolor=nordorange,
+	bookmarksnumbered=true,
+	bookmarksopen=true,
+	pdfborder={0 0 0},
+}
+
+% ========== 参考文献 ==========
+\RequirePackage[style=gb7714-2015,backend=biber]{biblatex}
+% 在 main.tex 中用 \addbibresource{...} 指定资源
+
+% ========== 其它宏包 ==========
+\RequirePackage{graphicx}
+\RequirePackage{booktabs}
+\RequirePackage{enumitem}
+\RequirePackage{caption}
+\captionsetup{font={small,sf},labelfont={bf,color=nordblue}}
+
+% 减少孤行
+\widowpenalty=10000
+\clubpenalty=10000
+
+\endinput

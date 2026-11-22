@@ -33,6 +33,8 @@ xelatex main.tex   # 编译两遍以生成正确的书签
 
 ## 来源声明
 
-《Git 项目管理笔记》整理自 Foundation of Embodied AI 课程讲义
-《Git 使用教程：30 分钟必学与科研进阶参考》
-（CC BY-NC-SA 4.0 · Xiong Zeng and contributors），仅作个人学习用途。
+本仓库为 cs336 课程的学习记录，笔记整理自 cs336 课程资料，仅作个人学习用途：
+
+- 《Git 项目管理笔记》整理自课程讲义《Git 使用教程：30 分钟必学与科研进阶参考》
+  （讲义原文标注：CC BY-NC-SA 4.0 · Xiong Zeng and contributors）
+- [cs336章节/](./cs336章节/) 存放课程章节原版 PDF（第一至七章）
